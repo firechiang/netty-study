@@ -8,9 +8,9 @@
 ![object](https://github.com/firechiang/netty-study/blob/master/image/channel_handler.svg) 
 
 #### ByteBuf简要说明
-![object](https://github.com/firechiang/netty-study/blob/master/image/bytebuf.svg) 
  - ByteBuf可以简单理解为一个数组，分为可读段（用来存储客户端发过来的数据）和可写段（用来存储服务端回写客户端的数据）
  - ByteBuf有两种类型一个Heap Buffer(堆内存缓冲区)，另一个是Direct Buffer(堆外内存缓冲区)
+![object](https://github.com/firechiang/netty-study/blob/master/image/bytebuf.svg)  
  ```bash
 +---------------------+------------------+------------------+
 [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] 
