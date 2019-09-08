@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import static java.lang.Math.min;
 
 /**
+ * 数据出栈缓冲区（注意：这个缓冲区里面维护的是个链表）
  * (Transport implementors only) an internal data structure used by {@link AbstractChannel} to store its pending
  * outbound write requests.
  * <p>
@@ -70,13 +71,15 @@ public final class ChannelOutboundBuffer {
     };
 
     private final Channel channel;
-
+    // 指针顺序描述
     // Entry(flushedEntry) --> ... Entry(unflushedEntry) --> ... Entry(tailEntry)
-    //
+    // 在缓冲区里面已经被flush过的ByteBuf的指针
     // The Entry that is the first in the linked-list structure that was flushed
     private Entry flushedEntry;
+    // 在缓冲区里面还没有被flush过的ByteBuf的指针（就是还没有调用过flush函数的ByteBuf）
     // The Entry which is the first unflushed in the linked-list structure
     private Entry unflushedEntry;
+    // 
     // The Entry which represents the tail of the buffer
     private Entry tailEntry;
     // The number of flushed entries that are not written yet
@@ -87,6 +90,7 @@ public final class ChannelOutboundBuffer {
 
     private boolean inFail;
 
+    // 当前缓冲区里面有多少个要写出去的字节
     private static final AtomicLongFieldUpdater<ChannelOutboundBuffer> TOTAL_PENDING_SIZE_UPDATER =
             AtomicLongFieldUpdater.newUpdater(ChannelOutboundBuffer.class, "totalPendingSize");
 
@@ -106,32 +110,37 @@ public final class ChannelOutboundBuffer {
     }
 
     /**
+     * 将ByteBuf放到缓冲区
      * Add given message to this {@link ChannelOutboundBuffer}. The given {@link ChannelPromise} will be notified once
      * the message was written.
      */
     public void addMessage(Object msg, int size, ChannelPromise promise) {
+    	// 创建缓冲节点
         Entry entry = Entry.newInstance(msg, size, total(msg), promise);
         if (tailEntry == null) {
             flushedEntry = null;
         } else {
             Entry tail = tailEntry;
+            // 将当前的ByteBuf添加到尾部
             tail.next = entry;
         }
         tailEntry = entry;
         if (unflushedEntry == null) {
             unflushedEntry = entry;
         }
-
+        // 统计当前有多少个字节要被写出去，是否要设置数据写的状态
         // increment pending bytes after adding message to the unflushed arrays.
         // See https://github.com/netty/netty/issues/1619
         incrementPendingOutboundBytes(entry.pendingSize, false);
     }
 
     /**
+     * 将出栈缓冲区里面的每个ByteBuf添加flush的标识
      * Add a flush to this {@link ChannelOutboundBuffer}. This means all previous added messages are marked as flushed
      * and so you will be able to handle them.
      */
     public void addFlush() {
+    	// 没有标识flush
         // There is no need to process all entries if there was already a flush before and no new messages
         // where added in the meantime.
         //
@@ -147,6 +156,7 @@ public final class ChannelOutboundBuffer {
                 if (!entry.promise.setUncancellable()) {
                     // Was cancelled so make sure we free up memory and notify about the freed bytes
                     int pending = entry.cancel();
+                    // 递减当前有多少个字节要被写出去，设置缓冲区为可写状态
                     decrementPendingOutboundBytes(pending, false, true);
                 }
                 entry = entry.next;
@@ -165,13 +175,20 @@ public final class ChannelOutboundBuffer {
         incrementPendingOutboundBytes(size, true);
     }
 
+    /**
+     * 累加当前有多少个字节要被写出去，是否要设置缓冲区为不可写状态
+     * @param size
+     * @param invokeLater
+     */
     private void incrementPendingOutboundBytes(long size, boolean invokeLater) {
         if (size == 0) {
             return;
         }
-
+        // 累加新添加的ByteBuf的字节数
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, size);
+        // 累加值是否大于Channel所配置的写缓冲区的最大值（Channel写缓冲区默认最大值是64*1024）
         if (newWriteBufferSize > channel.config().getWriteBufferHighWaterMark()) {
+        	// 设置缓冲区为不可写状态
             setUnwritable(invokeLater);
         }
     }
@@ -184,13 +201,20 @@ public final class ChannelOutboundBuffer {
         decrementPendingOutboundBytes(size, true, true);
     }
 
+    /**
+     * 递减当前有多少个字节要被写出去，是否要设置缓冲区为可写状态
+     * @param size
+     * @param invokeLater
+     * @param notifyWritability
+     */
     private void decrementPendingOutboundBytes(long size, boolean invokeLater, boolean notifyWritability) {
         if (size == 0) {
             return;
         }
-
+        // 递减值是否小于Channel所配置的写缓冲区的最小值（Channel写缓冲区默认最大值32*1024）
         long newWriteBufferSize = TOTAL_PENDING_SIZE_UPDATER.addAndGet(this, -size);
         if (notifyWritability && newWriteBufferSize < channel.config().getWriteBufferLowWaterMark()) {
+        	// 设置缓冲区为可写状态
             setWritable(invokeLater);
         }
     }
@@ -596,6 +620,10 @@ public final class ChannelOutboundBuffer {
         }
     }
 
+    /**
+     * 设置数据写的状态
+     * @param invokeLater
+     */
     private void setUnwritable(boolean invokeLater) {
         for (;;) {
             final int oldValue = unwritable;

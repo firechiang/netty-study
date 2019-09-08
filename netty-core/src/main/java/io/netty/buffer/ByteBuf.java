@@ -306,6 +306,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract ByteBuf unwrap();
 
     /**
+     * 是否堆外内存
      * Returns {@code true} if and only if this buffer is backed by an
      * NIO direct buffer.
      */
@@ -322,11 +323,13 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract ByteBuf asReadOnly();
 
     /**
+     * 获取数据已读取到的位置（就是数据读到哪里了）
      * Returns the {@code readerIndex} of this buffer.
      */
     public abstract int readerIndex();
 
     /**
+     * 设置数据已读取到的位置（就是数据读到哪里了）
      * Sets the {@code readerIndex} of this buffer.
      *
      * @throws IndexOutOfBoundsException
@@ -435,6 +438,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     }
 
     /**
+     * ByteBuf里面是否写入了一些数据
      * Returns {@code true}
      * if and only if {@code (this.writerIndex - this.readerIndex)} is greater
      * than {@code 0}.
@@ -592,6 +596,8 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract byte  getByte(int index);
 
     /**
+     * 
+     * 从index位置开始，读取1个字节
      * Gets an unsigned byte at the specified absolute {@code index} in this
      * buffer.  This method does not modify {@code readerIndex} or
      * {@code writerIndex} of this buffer.
@@ -603,6 +609,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract short getUnsignedByte(int index);
 
     /**
+     * 从index位置开始，读取2个字节
      * Gets a 16-bit short integer at the specified absolute {@code index} in
      * this buffer.  This method does not modify {@code readerIndex} or
      * {@code writerIndex} of this buffer.
@@ -670,6 +677,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract int getMediumLE(int index);
 
     /**
+     * 从index位置开始，读取3个字节
      * Gets an unsigned 24-bit medium integer at the specified absolute
      * {@code index} in this buffer.  This method does not modify
      * {@code readerIndex} or {@code writerIndex} of this buffer.
@@ -715,6 +723,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract int   getIntLE(int index);
 
     /**
+     * 从index位置开始，读取4个字节
      * Gets an unsigned 32-bit integer at the specified absolute {@code index}
      * in this buffer.  This method does not modify {@code readerIndex} or
      * {@code writerIndex} of this buffer.
@@ -737,6 +746,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract long  getUnsignedIntLE(int index);
 
     /**
+     * 从index位置开始，读取8个字节
      * Gets a 64-bit long integer at the specified absolute {@code index} in
      * this buffer.  This method does not modify {@code readerIndex} or
      * {@code writerIndex} of this buffer.
@@ -1611,6 +1621,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract ByteBuf readSlice(int length);
 
     /**
+     * 截取固定长度的数据（从读取位置开始截），生成新的ByteBuf
      * Returns a new retained slice of this buffer's sub-region starting at the current
      * {@code readerIndex} and increases the {@code readerIndex} by the size
      * of the new slice (= {@code length}).
@@ -1770,6 +1781,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract int readBytes(FileChannel out, long position, int length) throws IOException;
 
     /**
+     * 跳过指定长度（就是将数据已读取到的位置往后移几位）
      * Increases the current {@code readerIndex} by the specified
      * {@code length} in this buffer.
      *
@@ -2215,6 +2227,7 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
     public abstract ByteBuf retainedSlice();
 
     /**
+     * 从index位置开始获取length长度的数据
      * Returns a slice of this buffer's sub-region. Modifying the content of
      * the returned buffer or this buffer affects each other's content while
      * they maintain separate indexes and marks.

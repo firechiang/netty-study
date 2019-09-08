@@ -443,11 +443,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     protected abstract void doFinishConnect() throws Exception;
 
     /**
+     * 将原始的ByteBuf转换成堆外内存的ByteBuf
      * Returns an off-heap copy of the specified {@link ByteBuf}, and releases the original one.
      * Note that this method does not create an off-heap copy if the allocation / deallocation cost is too high,
      * but just returns the original {@link ByteBuf}..
      */
     protected final ByteBuf newDirectBuffer(ByteBuf buf) {
+    	// 获取ByteBuf可读数据大小
         final int readableBytes = buf.readableBytes();
         if (readableBytes == 0) {
             ReferenceCountUtil.safeRelease(buf);
@@ -456,7 +458,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         final ByteBufAllocator alloc = alloc();
         if (alloc.isDirectBufferPooled()) {
+        	// 创建堆外内存的ByteBuf
             ByteBuf directBuf = alloc.directBuffer(readableBytes);
+            // 将旧的ByteBuf数据写入到新的堆外内存的ByteBuf
             directBuf.writeBytes(buf, buf.readerIndex(), readableBytes);
             ReferenceCountUtil.safeRelease(buf);
             return directBuf;

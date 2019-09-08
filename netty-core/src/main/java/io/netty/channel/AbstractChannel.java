@@ -872,10 +872,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 数据写出到缓冲区的实现
+         */
         @Override
         public final void write(Object msg, ChannelPromise promise) {
             assertEventLoop();
-
+            // 缓冲ByteBuf的缓冲区
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 // If the outboundBuffer is null we know the channel was closed and so
@@ -890,6 +893,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
+            	// 将非堆外内存的ByteBuf转成堆外内存的ByteBuf
                 msg = filterOutboundMessage(msg);
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
@@ -900,23 +904,30 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 ReferenceCountUtil.release(msg);
                 return;
             }
-
+            // 将ByteBuf放到缓冲区
             outboundBuffer.addMessage(msg, size, promise);
         }
 
+        /**
+         * 将出栈缓冲区里面的数据写出去
+         */
         @Override
         public final void flush() {
             assertEventLoop();
-
+            // 获取到缓冲区
             ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) {
                 return;
             }
-
+            // 为每个ByteBuf添加flush的标识
             outboundBuffer.addFlush();
+            // 将所有为flush状态的ByteBuf写出去
             flush0();
         }
 
+        /**
+         * 将所有为flush状态的ByteBuf写出去
+         */
         @SuppressWarnings("deprecation")
         protected void flush0() {
             if (inFlush0) {
@@ -947,6 +958,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             try {
+            	// 将数据写出去（实际调用的是 AbstractNioByteChannel.doWrite()函数）
                 doWrite(outboundBuffer);
             } catch (Throwable t) {
                 if (t instanceof IOException && config().isAutoClose()) {

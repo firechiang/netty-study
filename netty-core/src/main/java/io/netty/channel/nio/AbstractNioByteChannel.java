@@ -218,14 +218,22 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         return doWriteInternal(in, in.current());
     }
 
+    /**
+     * 将出栈缓冲区里面的ByteBuf写出去
+     * @param in
+     * @param msg
+     * @return
+     * @throws Exception
+     */
     private int doWriteInternal(ChannelOutboundBuffer in, Object msg) throws Exception {
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
+            // ByteBuf里面没有写入数据
             if (!buf.isReadable()) {
                 in.remove();
                 return 0;
             }
-
+            // 将ByteBuf里面的数据写出去（注意：这个最终是使用JDK的Channel将数据写出去）
             final int localFlushedAmount = doWriteBytes(buf);
             if (localFlushedAmount > 0) {
                 in.progress(localFlushedAmount);
@@ -256,8 +264,12 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         return WRITE_STATUS_SNDBUF_FULL;
     }
 
+    /**
+     * 将出栈缓冲区里面的数据写出去
+     */
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
+    	// 自旋次数
         int writeSpinCount = config().getWriteSpinCount();
         do {
             Object msg = in.current();
@@ -267,20 +279,25 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 // Directly return here so incompleteWrite(...) is not called.
                 return;
             }
+            // 写出数据
             writeSpinCount -= doWriteInternal(in, msg);
         } while (writeSpinCount > 0);
 
         incompleteWrite(writeSpinCount < 0);
     }
 
+    /**
+     * 将非堆外内存的ByteBuf转成堆外内存的ByteBuf
+     */
     @Override
     protected final Object filterOutboundMessage(Object msg) {
         if (msg instanceof ByteBuf) {
             ByteBuf buf = (ByteBuf) msg;
+            // ByteBuf是否堆外内存
             if (buf.isDirect()) {
                 return msg;
             }
-
+            // 将原始的ByteBuf转换成堆外内存的ByteBuf
             return newDirectBuffer(buf);
         }
 

@@ -22,6 +22,7 @@ import io.netty.util.ByteProcessor;
 import java.util.List;
 
 /**
+ * 以换行符为分割的解码器
  * A decoder that splits the received {@link ByteBuf}s on line endings.
  * <p>
  * Both {@code "\n"} and {@code "\r\n"} are handled.
@@ -34,15 +35,19 @@ import java.util.List;
  * For a more general delimiter-based decoder, see {@link DelimiterBasedFrameDecoder}.
  */
 public class LineBasedFrameDecoder extends ByteToMessageDecoder {
-
+    // 一行数据的最大长度（如果超过了这个长度是否需要丢弃，下面有个变量可配置）
     /** Maximum length of a frame we're willing to decode.  */
     private final int maxLength;
+    // 如果一行数据超过了最大长度，是否需要抛出异常
     /** Whether or not to throw an exception as soon as we exceed maxLength. */
     private final boolean failFast;
+    // 解析出的一行数据是否不需要携带换行符
     private final boolean stripDelimiter;
 
+    // 是否需要丢弃数据
     /** True if we're discarding input because we're already over maxLength.  */
     private boolean discarding;
+    // 解码器当现在已经丢弃了多少个字节
     private int discardedBytes;
 
     /** Last scan position. */
@@ -82,6 +87,7 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
     @Override
     protected final void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         Object decoded = decode(ctx, in);
+        // 如果解析出来了对象，只要将对象放到List里面，父类会循环向下传播Handler
         if (decoded != null) {
             out.add(decoded);
         }
@@ -96,33 +102,47 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
      *                          be created.
      */
     protected Object decode(ChannelHandlerContext ctx, ByteBuf buffer) throws Exception {
+    	// 获取第一个换行符的位置（注意：如果换行符连续在一起，默认当成一个，且取第一个）
         final int eol = findEndOfLine(buffer);
+        // 是否丢弃数据（首次是false）
         if (!discarding) {
             if (eol >= 0) {
                 final ByteBuf frame;
+                // 获取一行数据的长度
                 final int length = eol - buffer.readerIndex();
+                // 获取到分割符的长度
                 final int delimLength = buffer.getByte(eol) == '\r'? 2 : 1;
-
+                // 一行数据超过了最大限制
                 if (length > maxLength) {
+                	// 设置数据已读取到的位置（就是最后一个分割符的位置）
                     buffer.readerIndex(eol + delimLength);
+                    // 传播异常
                     fail(ctx, length);
                     return null;
                 }
-
+                // 是否不需要携带分割符
                 if (stripDelimiter) {
+                	// 截取固定长度的数据（从读取位置开始截），生成新的ByteBuf
                     frame = buffer.readRetainedSlice(length);
+                    // 跳过分割符字节长度（就是将数据已读取到的位置往后移几位）
                     buffer.skipBytes(delimLength);
                 } else {
+                	// 截取固定长度的数据（从读取位置开始截），生成新的ByteBuf
                     frame = buffer.readRetainedSlice(length + delimLength);
                 }
-
                 return frame;
+            // 如果没有找到换行符    
             } else {
+            	// 获取数据可读长度
                 final int length = buffer.readableBytes();
+                // 一行数据超过了最大限制
                 if (length > maxLength) {
                     discardedBytes = length;
+                    // 将可读数据位置，标记为写写指针
                     buffer.readerIndex(buffer.writerIndex());
+                    // 丢弃为true
                     discarding = true;
+                    // 抛异常
                     offset = 0;
                     if (failFast) {
                         fail(ctx, "over " + discardedBytes);
@@ -130,6 +150,7 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
                 }
                 return null;
             }
+        // 丢弃    
         } else {
             if (eol >= 0) {
                 final int length = discardedBytes + eol - buffer.readerIndex();
@@ -161,6 +182,7 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
     }
 
     /**
+     * 获取第一个换行符的位置（注意：如果换行符连续在一起，默认当成一个，且取第一个）
      * Returns the index in the buffer of the end of line found.
      * Returns -1 if no end of line was found in the buffer.
      */

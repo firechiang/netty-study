@@ -23,6 +23,7 @@ import java.util.IdentityHashMap;
 import java.util.Set;
 
 /**
+ * Netty重新实现的ThreadLocal
  * A special variant of {@link ThreadLocal} that yields higher access performance when accessed from a
  * {@link FastThreadLocalThread}.
  * <p>

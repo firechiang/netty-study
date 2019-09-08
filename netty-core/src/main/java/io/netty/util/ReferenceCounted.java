@@ -60,6 +60,7 @@ public interface ReferenceCounted {
     ReferenceCounted touch(Object hint);
 
     /**
+     * 释放ByteBuf内存
      * Decreases the reference count by {@code 1} and deallocates this object if the reference count reaches at
      * {@code 0}.
      *

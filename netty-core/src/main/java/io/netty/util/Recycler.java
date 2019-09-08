@@ -32,6 +32,7 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 /**
+ * 轻量级对象池
  * Light-weight object pool based on a thread-local stack.
  *
  * @param <T> the type of the pooled object
@@ -158,6 +159,7 @@ public abstract class Recycler<T> {
             return newObject((Handle<T>) NOOP_HANDLE);
         }
         Stack<T> stack = threadLocal.get();
+        // 弹出一个handle对象
         DefaultHandle<T> handle = stack.pop();
         if (handle == null) {
             handle = stack.newHandle();
@@ -470,12 +472,20 @@ public abstract class Recycler<T> {
         private int handleRecycleCount = -1; // Start with -1 so the first one will be recycled.
         private WeakOrderQueue cursor, prev;
         private volatile WeakOrderQueue head;
-
+        /**
+         * @param parent
+         * @param thread                  所属线程
+         * @param maxCapacity             栈最大容量
+         * @param maxSharedCapacityFactor 
+         * @param ratioMask               对象回收频率
+         * @param maxDelayedQueues        一个对象最多能被多少个线程释放  
+         */
         Stack(Recycler<T> parent, Thread thread, int maxCapacity, int maxSharedCapacityFactor,
               int ratioMask, int maxDelayedQueues) {
             this.parent = parent;
             threadRef = new WeakReference<Thread>(thread);
             this.maxCapacity = maxCapacity;
+            // 能被其它线程缓存的最大个数
             availableSharedCapacity = new AtomicInteger(max(maxCapacity / maxSharedCapacityFactor, LINK_CAPACITY));
             elements = new DefaultHandle[min(INITIAL_CAPACITY, maxCapacity)];
             this.ratioMask = ratioMask;
@@ -507,6 +517,7 @@ public abstract class Recycler<T> {
         DefaultHandle<T> pop() {
             int size = this.size;
             if (size == 0) {
+            	// 去其它线程把对象给捞回来
                 if (!scavenge()) {
                     return null;
                 }
@@ -586,11 +597,18 @@ public abstract class Recycler<T> {
             return success;
         }
 
+        /**
+         * 回收对象
+         * @param item
+         */
         void push(DefaultHandle<?> item) {
             Thread currentThread = Thread.currentThread();
+            // 是不是同一个线程
             if (threadRef.get() == currentThread) {
                 // The current Thread is the thread that belongs to the Stack, we can try to push the object now.
                 pushNow(item);
+                
+            // 非同一个线程回收    
             } else {
                 // The current Thread is not the one that belongs to the Stack
                 // (or the Thread that belonged to the Stack was collected already), we need to signal that the push
@@ -618,18 +636,28 @@ public abstract class Recycler<T> {
             this.size = size + 1;
         }
 
+        /**
+         * 非同一个线程回收对象
+         * @param item
+         * @param thread
+         */
         private void pushLater(DefaultHandle<?> item, Thread thread) {
+        	// 获取当前线程存放WeakOrderQueue的Map
             // we don't want to have a ref to the queue as the value in our weak map
             // so we null it out; to ensure there are no races with restoring it later
             // we impose a memory ordering here (no-op on x86)
             Map<Stack<?>, WeakOrderQueue> delayedRecycled = DELAYED_RECYCLED.get();
+            // 获取到其它线程的  WeakOrderQueue
             WeakOrderQueue queue = delayedRecycled.get(this);
+            // 当前线程是否回收过其它线程的对象
             if (queue == null) {
+            	// 当前线程是否还能回收其它线程的对象
                 if (delayedRecycled.size() >= maxDelayedQueues) {
                     // Add a dummy queue so we know we should drop the object
                     delayedRecycled.put(this, WeakOrderQueue.DUMMY);
                     return;
                 }
+                // 创建
                 // Check if we already reached the maximum number of delayed queues and if we can allocate at all.
                 if ((queue = WeakOrderQueue.allocate(this, thread)) == null) {
                     // drop object

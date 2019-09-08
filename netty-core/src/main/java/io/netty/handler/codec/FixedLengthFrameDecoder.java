@@ -23,8 +23,10 @@ import io.netty.channel.ChannelHandlerContext;
 import java.util.List;
 
 /**
+ * 固定长度的解码器
  * A decoder that splits the received {@link ByteBuf}s by the fixed number
  * of bytes. For example, if you received the following four fragmented packets:
+ * 客户端传过来的数据如下：
  * <pre>
  * +---+----+------+----+
  * | A | BC | DEFG | HI |
@@ -32,6 +34,7 @@ import java.util.List;
  * </pre>
  * A {@link FixedLengthFrameDecoder}{@code (3)} will decode them into the
  * following three packets with the fixed length:
+ * 数据分割长度是3，解码后的数据如下：
  * <pre>
  * +-----+-----+-----+
  * | ABC | DEF | GHI |
@@ -39,7 +42,7 @@ import java.util.List;
  * </pre>
  */
 public class FixedLengthFrameDecoder extends ByteToMessageDecoder {
-
+    // 数据分割长度
     private final int frameLength;
 
     /**
@@ -55,6 +58,7 @@ public class FixedLengthFrameDecoder extends ByteToMessageDecoder {
     @Override
     protected final void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         Object decoded = decode(ctx, in);
+        // 如果解析出来了对象，只要将对象放到List里面，父类会循环向下传播Handler
         if (decoded != null) {
             out.add(decoded);
         }
@@ -70,9 +74,11 @@ public class FixedLengthFrameDecoder extends ByteToMessageDecoder {
      */
     protected Object decode(
             @SuppressWarnings("UnusedParameters") ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+    	// 如果可读长度小于数据分割长度，返回null
         if (in.readableBytes() < frameLength) {
             return null;
         } else {
+        	// 截取固定长度的数据（从开始位置开始截）
             return in.readRetainedSlice(frameLength);
         }
     }

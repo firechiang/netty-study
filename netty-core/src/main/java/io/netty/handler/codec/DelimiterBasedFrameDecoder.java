@@ -23,6 +23,7 @@ import io.netty.channel.ChannelHandlerContext;
 import java.util.List;
 
 /**
+ * 基于分割符的解码器
  * A decoder that splits the received {@link ByteBuf}s by one or more
  * delimiters.  It is particularly useful for decoding the frames which ends
  * with a delimiter such as {@link Delimiters#nulDelimiter() NUL} or
@@ -38,6 +39,7 @@ import java.util.List;
  * delimiter.  If more than one delimiter is found in the buffer, it chooses
  * the delimiter which produces the shortest frame.  For example, if you have
  * the following data in the buffer:
+ * 客户端传过来的数据如下:
  * <pre>
  * +--------------+
  * | ABC\nDEF\r\n |
@@ -60,11 +62,17 @@ import java.util.List;
 public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
 
     private final ByteBuf[] delimiters;
+    // 分割后单条数据最大长度
     private final int maxFrameLength;
+    // 分割出来的数据是否不携带分割符
     private final boolean stripDelimiter;
+    // 分割后单条数据超过最大长度是否抛出异常
     private final boolean failFast;
+    // 是否需要丢弃数据
     private boolean discardingTooLongFrame;
+    // 当前丢弃的字节数
     private int tooLongFrameLength;
+    // 换行符解码器
     /** Set only when decoding with "\n" and "\r\n" as the delimiter.  */
     private final LineBasedFrameDecoder lineBasedDecoder;
 
@@ -122,10 +130,10 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
     /**
      * Creates a new instance.
      *
-     * @param maxFrameLength  the maximum length of the decoded frame.
+     * @param maxFrameLength  the maximum length of the decoded frame.（分割后单条数据最大长度）
      *                        A {@link TooLongFrameException} is thrown if
      *                        the length of the frame exceeds this value.
-     * @param delimiters  the delimiters
+     * @param delimiters  the delimiters 分割符
      */
     public DelimiterBasedFrameDecoder(int maxFrameLength, ByteBuf... delimiters) {
         this(maxFrameLength, true, delimiters);
@@ -173,14 +181,19 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
             throw new IllegalArgumentException("empty delimiters");
         }
 
+        // 如果分割符是换行符，直接初始化换行符解码器
         if (isLineBased(delimiters) && !isSubclass()) {
             lineBasedDecoder = new LineBasedFrameDecoder(maxFrameLength, stripDelimiter, failFast);
             this.delimiters = null;
         } else {
+        	// 所有分割符
             this.delimiters = new ByteBuf[delimiters.length];
             for (int i = 0; i < delimiters.length; i ++) {
+            	// 分割符
                 ByteBuf d = delimiters[i];
+                // 验证分割符是否null
                 validateDelimiter(d);
+                // 获取分割符数据
                 this.delimiters[i] = d.slice(d.readerIndex(), d.readableBytes());
             }
             lineBasedDecoder = null;
@@ -190,6 +203,9 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
         this.failFast = failFast;
     }
 
+    /**
+     * 判断分割符是否是换行符
+     */
     /** Returns true if the delimiters are "\n" and "\r\n".  */
     private static boolean isLineBased(final ByteBuf[] delimiters) {
         if (delimiters.length != 2) {
@@ -215,6 +231,7 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
 
     @Override
     protected final void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+    	// 如果解析出来了对象，只要将对象放到List里面，父类会循环向下传播Handler
         Object decoded = decode(ctx, in);
         if (decoded != null) {
             out.add(decoded);
@@ -230,28 +247,36 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
      *                          be created.
      */
     protected Object decode(ChannelHandlerContext ctx, ByteBuf buffer) throws Exception {
+    	// 如果换行符解码器不为空，就直接使用换行符解码器
         if (lineBasedDecoder != null) {
             return lineBasedDecoder.decode(ctx, buffer);
         }
         // Try all delimiters and choose the delimiter which yields the shortest frame.
         int minFrameLength = Integer.MAX_VALUE;
         ByteBuf minDelim = null;
+        // 循环迭代所有的分割符，分割数据，找到最小数据的长度
+        // 注意：其实就是找到第一个分割符分割出来的数据的长度（为什么要这样找，是因为不知道那个分割符会在前面）
         for (ByteBuf delim: delimiters) {
             int frameLength = indexOf(buffer, delim);
             if (frameLength >= 0 && frameLength < minFrameLength) {
+            	// 第一个分割符分割出来的数据的长度
                 minFrameLength = frameLength;
+                // 分割符
                 minDelim = delim;
             }
         }
-
+        // 找到了第一个分割符
         if (minDelim != null) {
+        	// 第一个分割符的长度
             int minDelimLength = minDelim.capacity();
             ByteBuf frame;
-
+            // 是否需要丢弃数据（首次是false）
             if (discardingTooLongFrame) {
+            	// 标记不丢弃
                 // We've just finished discarding a very large frame.
                 // Go back to the initial state.
                 discardingTooLongFrame = false;
+                // 跳过第一个分割符分割出来的数据的长度加分割符字节长度（就是将数据已读取到的位置往后移几位）
                 buffer.skipBytes(minFrameLength + minDelimLength);
 
                 int tooLongFrameLength = this.tooLongFrameLength;
@@ -261,22 +286,30 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
                 }
                 return null;
             }
-
+            // 第一个分割符分割出来的数据的长度 大于 最大长度的限制
             if (minFrameLength > maxFrameLength) {
+            	// 跳过第一个分割符分割出来的数据的长度加分割符字节长度（就是将数据已读取到的位置往后移几位）
                 // Discard read frame.
                 buffer.skipBytes(minFrameLength + minDelimLength);
+                // 抛异常
                 fail(minFrameLength);
                 return null;
             }
-
+            
+            // 分割出来的数据不携带分割符
             if (stripDelimiter) {
+            	// 截取固定长度的数据（从读取位置开始截），生成新的ByteBuf
                 frame = buffer.readRetainedSlice(minFrameLength);
+                // 跳过分割符字节长度（就是将数据已读取到的位置往后移几位）
                 buffer.skipBytes(minDelimLength);
             } else {
+            	// 截取固定长度的数据（从读取位置开始截），生成新的ByteBuf
                 frame = buffer.readRetainedSlice(minFrameLength + minDelimLength);
             }
 
             return frame;
+            
+        // 没有找到第一个分割符    
         } else {
             if (!discardingTooLongFrame) {
                 if (buffer.readableBytes() > maxFrameLength) {

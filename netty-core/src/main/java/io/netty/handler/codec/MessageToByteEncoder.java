@@ -27,6 +27,8 @@ import io.netty.util.internal.TypeParameterMatcher;
 
 
 /**
+ * 
+ * 编码器的抽象
  * {@link ChannelOutboundHandlerAdapter} which encodes message in a stream-like fashion from one message to an
  * {@link ByteBuf}.
  *
@@ -88,6 +90,7 @@ public abstract class MessageToByteEncoder<I> extends ChannelOutboundHandlerAdap
     }
 
     /**
+     * 判断当前编码器是能处理这个要编码的对象
      * Returns {@code true} if the given message should be handled. If {@code false} it will be passed to the next
      * {@link ChannelOutboundHandler} in the {@link ChannelPipeline}.
      */
@@ -95,28 +98,39 @@ public abstract class MessageToByteEncoder<I> extends ChannelOutboundHandlerAdap
         return matcher.match(msg);
     }
 
+    /**
+     * 编码器编码的实现过程
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         ByteBuf buf = null;
         try {
+        	// 判断当前编码器是能处理这个要编码的对象
             if (acceptOutboundMessage(msg)) {
                 @SuppressWarnings("unchecked")
                 I cast = (I) msg;
+                // 分配内存（创建ByteBuf缓冲区）
                 buf = allocateBuffer(ctx, cast, preferDirect);
                 try {
+                	// 调用子类实现编码
                     encode(ctx, cast, buf);
                 } finally {
+                	// 释放原型对象
                     ReferenceCountUtil.release(cast);
                 }
 
+                // ByteBuf里面是否写入了一些数据
                 if (buf.isReadable()) {
+                	// 写出数据（最终调用 AbstractChannel.AbstractUnsafe.write()函数）
                     ctx.write(buf, promise);
                 } else {
                     buf.release();
                     ctx.write(Unpooled.EMPTY_BUFFER, promise);
                 }
+                // 将ByteBuf置空
                 buf = null;
             } else {
+            	// 写出数据（最终调用 AbstractChannel.AbstractUnsafe.write()函数）
                 ctx.write(msg, promise);
             }
         } catch (EncoderException e) {
@@ -124,18 +138,22 @@ public abstract class MessageToByteEncoder<I> extends ChannelOutboundHandlerAdap
         } catch (Throwable e) {
             throw new EncoderException(e);
         } finally {
+        	// 不等于空
             if (buf != null) {
+            	// 释放ByteBuf内存
                 buf.release();
             }
         }
     }
 
     /**
+     * 分配内存
      * Allocate a {@link ByteBuf} which will be used as argument of {@link #encode(ChannelHandlerContext, I, ByteBuf)}.
      * Sub-classes may override this method to return {@link ByteBuf} with a perfect matching {@code initialCapacity}.
      */
     protected ByteBuf allocateBuffer(ChannelHandlerContext ctx, @SuppressWarnings("unused") I msg,
                                boolean preferDirect) throws Exception {
+    	// 是否分配堆外内存
         if (preferDirect) {
             return ctx.alloc().ioBuffer();
         } else {
